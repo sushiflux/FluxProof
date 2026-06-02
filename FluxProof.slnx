@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FluxProof.API/FluxProof.API.csproj" />
+    <Project Path="src/FluxProof.Application/FluxProof.Application.csproj" />
+    <Project Path="src/FluxProof.Domain/FluxProof.Domain.csproj" />
+    <Project Path="src/FluxProof.Infrastructure/FluxProof.Infrastructure.csproj" />
+  </Folder>
+</Solution>

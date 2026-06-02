@@ -1,0 +1,21 @@
+services:
+  fluxproof-postgres:
+    container_name: FluxProof-Postgres
+    image: postgres:17
+    environment:
+      POSTGRES_DB: fluxproof-db
+      POSTGRES_USER: flux
+      POSTGRES_PASSWORD: flux
+    ports:
+      - "5433:5432"
+    volumes:
+      - fluxproof_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flux -d fluxproof-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  fluxproof_pgdata:

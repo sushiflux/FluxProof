@@ -1,0 +1,28 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+.idea/
+*.DotSettings.user
+appsettings.Production.json
+appsettings.Local.json
+
+## EF Migrations (keep the files, ignore tools)
+*.db
+*.db-shm
+*.db-wal
+
+## Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+## Docker
+.env
+
+## OS
+.DS_Store
+Thumbs.db
