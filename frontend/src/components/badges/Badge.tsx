@@ -1,7 +1,7 @@
 import { cn } from '../../lib/utils'
 
 const BADGE_CONFIG: Record<string, { label: string; className: string }> = {
-  Update:     { label: 'Update',     className: 'bg-blue-100 text-blue-800 border-blue-300' },
+  Update:     { label: 'Update',     className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
   Change:     { label: 'Change',     className: 'bg-purple-100 text-purple-800 border-purple-300' },
   New:        { label: 'New',        className: 'bg-green-100 text-green-800 border-green-300' },
   Fix:        { label: 'Fix',        className: 'bg-orange-100 text-orange-800 border-orange-300' },

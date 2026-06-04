@@ -101,14 +101,8 @@ export function UserLayout() {
       </aside>
 
       {/* Content */}
-      <div
-        className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950"
-        style={{
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
-        }}
-      >
-        <div className="p-6">
+      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+        <div className="flex-1 min-h-0 p-6 overflow-auto">
           <Outlet />
         </div>
       </div>

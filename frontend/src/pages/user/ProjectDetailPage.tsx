@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectsApi } from '../../api/projects'
@@ -7,7 +7,7 @@ import { formatDate } from '../../lib/utils'
 import { ArrowLeft, Plus, X, RefreshCw, Trash2 } from 'lucide-react'
 import type { Revision } from '../../types'
 import { useAuthStore } from '../../store/authStore'
-import { motion, useInView } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 const IS_DEV = import.meta.env.DEV
 
@@ -22,29 +22,29 @@ const TEXTAREA = `${INPUT} resize-none`
 function TimelineItem({ revision, projectId, canEdit, canDelete }: {
   revision: Revision; projectId: string; canEdit: boolean; canDelete: boolean
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: '-40px 0px' })
+  const hasUpdate = revision.items.some(i => i.badgeName === 'Update' && !i.isDeleted)
 
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 14 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="relative pl-10"
-    >
-      {/*
-        Punkt zentriert auf der Linie (left-4 + -translate-x-1/2).
-        top-[38px] = p-5 Padding (20px) + Flex-Zentrierung der Header-Zeile (~18px)
-      */}
+    <div className="relative pl-36" {...(hasUpdate && { 'data-update-version': revision.version })}>
+      {/* Update-Badge als Pfeil – Spitze zeigt zum Dot */}
+      {hasUpdate && (
+        <div
+          className={`absolute left-0 top-1/2 -translate-y-1/2 flex items-center pl-2 pr-5 py-[3px] text-xs font-semibold ${BADGE_CONFIG['Update'].className}`}
+          style={{ clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)' }}
+        >
+          {BADGE_CONFIG['Update'].label}
+        </div>
+      )}
+
+      {/* Dot auf der Linie (left-28 = 56px, -translate-x-1/2 zentriert) */}
       <div className={`
-        absolute left-4 top-[38px] w-3 h-3 rounded-full -translate-x-1/2 z-10
+        absolute left-28 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full -translate-x-1/2 z-10
         border-2 border-gray-50 dark:border-gray-950 shadow-sm
         ${revision.isReplaced ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-500'}
       `} />
 
       <RevisionCard revision={revision} projectId={projectId} canEdit={canEdit} canDelete={canDelete} />
-    </motion.div>
+    </div>
   )
 }
 
@@ -227,6 +227,42 @@ export function ProjectDetailPage() {
   const [showNew, setShowNew] = useState(false)
   const { user } = useAuthStore()
 
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const [isScrolled, setIsScrolled] = useState(false)
+  const [updateAbove, setUpdateAbove] = useState<string | null>(null)
+  const [updateBelow, setUpdateBelow] = useState<string | null>(null)
+
+  const checkUpdateVisibility = useCallback(() => {
+    const container = timelineRef.current
+    if (!container) return
+    const scrollTop = container.scrollTop
+    const scrollBottom = scrollTop + container.clientHeight
+    const items = container.querySelectorAll<HTMLElement>('[data-update-version]')
+    let above: string | null = null
+    let below: string | null = null
+    items.forEach(item => {
+      const top = item.offsetTop
+      const bottom = top + item.offsetHeight
+      const version = item.getAttribute('data-update-version')!
+      if (bottom <= scrollTop) above = version
+      else if (top >= scrollBottom && !below) below = version
+    })
+    setUpdateAbove(above)
+    setUpdateBelow(below)
+  }, [])
+
+  const handleTimelineScroll = useCallback(() => {
+    setIsScrolled((timelineRef.current?.scrollTop ?? 0) > 10)
+    checkUpdateVisibility()
+  }, [checkUpdateVisibility])
+
+  const handlePageWheel = useCallback((e: React.WheelEvent) => {
+    const el = timelineRef.current
+    if (!el || el.contains(e.target as Node)) return
+    const delta = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY
+    el.scrollTop += delta
+  }, [])
+
   const { data: project } = useQuery({
     queryKey: ['project', id],
     queryFn: () => projectsApi.get(id!),
@@ -239,6 +275,8 @@ export function ProjectDetailPage() {
     enabled: !!id,
   })
 
+  useEffect(() => { checkUpdateVisibility() }, [revisions, checkUpdateVisibility])
+
   const canEdit = project?.userPermission === 2 || project?.userPermission === undefined
   const isAdminOrDev = user?.roles.some(r => r === 'Admin' || r === 'Developer')
   const canDelete = !!(isAdminOrDev && IS_DEV)
@@ -250,75 +288,148 @@ export function ProjectDetailPage() {
   )
 
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-8">
-        <Link to="/app/projects" className="p-2 -ml-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-          <ArrowLeft size={20} />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{project?.name}</h1>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${project?.category === 1 ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'}`}>
-              {project?.categoryName}
-            </span>
+    <div className="h-full flex flex-col" onWheel={handlePageWheel}>
+      <div className="flex items-center gap-4 mb-8 flex-shrink-0">
+        {!isScrolled ? (
+          <Link to="/app/projects" className="p-2 -ml-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <ArrowLeft size={20} />
+          </Link>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.18 }}
+          >
+            <Link to="/app/projects"
+              className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+                shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300
+                hover:bg-gray-50 dark:hover:bg-gray-700 hover:scale-105 active:scale-95 transition-all shrink-0">
+              <ArrowLeft size={18} />
+            </Link>
+          </motion.div>
+        )}
+        {!isScrolled && (
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{project?.name}</h1>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${project?.category === 1 ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'}`}>
+                {project?.categoryName}
+              </span>
+            </div>
+            {project?.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{project.description}</p>}
           </div>
-          {project?.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{project.description}</p>}
-        </div>
+        )}
+
+        {/* Bubble – erscheint wenn der Add-Button durch Scrollen nicht mehr sichtbar ist */}
+        {canEdit && isScrolled && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.7 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => setShowNew(true)}
+            title="Neue Revision erstellen"
+            className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center
+              shadow-lg hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all shrink-0"
+          >
+            <Plus size={18} />
+          </motion.button>
+        )}
       </div>
 
-      <div className="max-w-3xl mx-auto">
-        {/*
-          Timeline-Linie läuft bei left:16px (= left-4).
-          Dots sitzen ebenfalls bei left-4, zentriert mit -translate-x-1/2.
-          pl-10 (40px) rückt die Card nach rechts, Linie bleibt sichtbar.
-        */}
-        <div className="relative space-y-4">
-          {/* Vertikale Linie – 16px von links, durchgehend ohne Verlauf */}
-          <div className="absolute left-4 top-0 bottom-0 w-px
-            bg-gray-200 dark:bg-gray-700 pointer-events-none" />
+      <div className="relative flex-1 min-h-0 max-w-3xl mx-auto w-full flex flex-col">
 
-          {/* Add-Button als erstes Timeline-Item */}
-          {canEdit && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="relative pl-10"
-            >
-              {/* grüner Punkt – gleiche Position wie Revision-Punkte */}
-              <div className="absolute left-4 top-[38px] w-3 h-3 rounded-full -translate-x-1/2 z-10
-                bg-green-400 border-2 border-gray-50 dark:border-gray-950 shadow-sm" />
-              <button
-                onClick={() => setShowNew(true)}
-                className="w-full flex items-center gap-3 px-5 py-4 rounded-xl
-                  border-2 border-dashed border-gray-200 dark:border-gray-700
-                  text-gray-400 dark:text-gray-500
-                  hover:border-blue-400 dark:hover:border-blue-600
-                  hover:text-blue-600 dark:hover:text-blue-400
-                  hover:bg-blue-50/50 dark:hover:bg-blue-900/10
-                  transition-all group"
-              >
-                <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800
-                  flex items-center justify-center shrink-0
-                  group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 transition-colors">
-                  <Plus size={15} />
-                </div>
-                <span className="text-sm font-medium">Neue Revision erstellen</span>
-              </button>
-            </motion.div>
-          )}
-
-          {/* Revisionen */}
-          {revisions?.length === 0 && !canEdit ? (
-            <div className="pl-10 py-12 text-gray-400 dark:text-gray-500 text-center">
-              Noch keine Revisionen
+        {/* Indikator: Update-Revision oberhalb – Spitze zeigt nach oben */}
+        {updateAbove && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute top-0 left-0 z-10 flex flex-col items-center"
+          >
+            <div className="w-3 h-[7px] bg-yellow-100 -mb-px"
+              style={{ clipPath: 'polygon(50% 0, 100% 100%, 0 100%)' }} />
+            <div className="rounded-md px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold flex items-center">
+              {BADGE_CONFIG['Update'].label}
+              <span className="mx-1.5 opacity-30 font-light">·</span>
+              <span className="font-mono font-medium">v{updateAbove}</span>
             </div>
-          ) : (
-            revisions?.map((r) => (
-              <TimelineItem key={r.id} revision={r} projectId={id!} canEdit={canEdit} canDelete={canDelete} />
-            ))
-          )}
+          </motion.div>
+        )}
+
+        <div
+          ref={timelineRef}
+          onScroll={handleTimelineScroll}
+          className="flex-1 min-h-0 overflow-y-auto scrollbar-hide bg-gray-50 dark:bg-gray-950"
+        >
+          {/*
+            Timeline-Linie läuft bei left:16px (= left-4).
+            Dots sitzen ebenfalls bei left-4, zentriert mit -translate-x-1/2.
+            pl-10 (40px) rückt die Card nach rechts, Linie bleibt sichtbar.
+          */}
+          <div className="relative space-y-4 pt-1 pb-4">
+              {/* Vertikale Linie bei left-28 (56px) */}
+              <div className="absolute left-28 top-0 bottom-0 w-px
+                bg-gray-200 dark:bg-gray-700 pointer-events-none" />
+
+              {/* Add-Button als erstes Timeline-Item */}
+              {canEdit && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="relative pl-36"
+                >
+                  {/* grüner Punkt – gleiche Position wie Revision-Punkte */}
+                  <div className="absolute left-28 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full -translate-x-1/2 z-10
+                    bg-green-400 border-2 border-gray-50 dark:border-gray-950 shadow-sm" />
+                  <button
+                    onClick={() => setShowNew(true)}
+                    className="w-full flex items-center gap-3 px-5 py-4 rounded-xl
+                      border-2 border-dashed border-blue-400 dark:border-blue-500
+                      text-blue-600 dark:text-blue-400
+                      hover:bg-blue-50 dark:hover:bg-blue-900/20
+                      hover:border-blue-500 dark:hover:border-blue-400
+                      transition-all group"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40
+                      flex items-center justify-center shrink-0 transition-colors">
+                      <Plus size={15} />
+                    </div>
+                    <span className="text-sm font-semibold">Neue Revision erstellen</span>
+                  </button>
+                </motion.div>
+              )}
+
+              {/* Revisionen */}
+              {revisions?.length === 0 && !canEdit ? (
+                <div className="pl-10 py-12 text-gray-400 dark:text-gray-500 text-center">
+                  Noch keine Revisionen
+                </div>
+              ) : (
+                revisions?.map((r) => (
+                  <TimelineItem key={r.id} revision={r} projectId={id!} canEdit={canEdit} canDelete={canDelete} />
+                ))
+              )}
+          </div>
         </div>
+
+        {/* Indikator: Update-Revision unterhalb – Pfeil rechts, Spitze unten */}
+        {updateBelow && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute bottom-0 left-0 z-10 flex flex-col items-center"
+          >
+            <div className="rounded-md px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold flex items-center -mb-px">
+              {BADGE_CONFIG['Update'].label}
+              <span className="mx-1.5 opacity-30 font-light">·</span>
+              <span className="font-mono font-medium">v{updateBelow}</span>
+            </div>
+            <div className="w-3 h-[7px] bg-yellow-100"
+              style={{ clipPath: 'polygon(0 0, 100% 0, 50% 100%)' }} />
+          </motion.div>
+        )}
+
       </div>
 
       {showNew && <NewRevisionModal projectId={id!} onClose={() => setShowNew(false)} />}

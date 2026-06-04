@@ -104,13 +104,7 @@ export function AdminLayout() {
       </aside>
 
       {/* Content */}
-      <div
-        className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950"
-        style={{
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)',
-        }}
-      >
+      <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950">
         <Outlet />
       </div>
     </div>
