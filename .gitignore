@@ -27,3 +27,6 @@ frontend/.env.local
 .DS_Store
 Thumbs.db
 *.png
+
+# Private development documents: intern/ is backed up separately and never part of this repository.
+/intern/

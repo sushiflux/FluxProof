@@ -24,6 +24,9 @@ ARROW="${MAGENTA}▶${NC}"
 
 # ── Pfade & Konfiguration ─────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Git-Hooks verdrahten (Sicherung von intern/ nach jedem Commit)
+[ -d "$SCRIPT_DIR/.git" ] && git -C "$SCRIPT_DIR" config core.hooksPath scripts/git-hooks 2>/dev/null || true
 CONTAINER_NAME="FluxProof-Postgres"
 API_PROJECT="$SCRIPT_DIR/src/FluxProof.API/FluxProof.API.csproj"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
